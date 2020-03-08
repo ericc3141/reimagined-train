@@ -1,8 +1,12 @@
 module Main exposing (main)
 
 import Browser exposing (Document)
+import Debug
 import Dict exposing (Dict)
-import Html exposing (Html, div, text)
+import Element as El exposing (Element)
+import Element.Background as Elbg
+import Element.Input as Elin
+import Html exposing (Html)
 
 
 main =
@@ -26,6 +30,7 @@ type Expr
 
 type Msg
     = Push String
+    | In String
 
 
 init : () -> ( Model, Cmd Msg )
@@ -35,19 +40,70 @@ init _ =
     )
 
 
+viewCell : ( Int, Expr ) -> Element Msg
+viewCell ( idx, expr ) =
+    case expr of
+        Num val ->
+            El.text <| String.fromFloat val
+
+
 view : Model -> Document Msg
-view model =
+view { cells, pos } =
     let
-        elem =
-            [ Html.text "hello world" ]
+        input : Element Msg
+        input =
+            Elin.text []
+                { label = Elin.labelHidden "input"
+                , onChange = In
+                , placeholder = Nothing
+                , text = ""
+                }
+
+        cellsView : Element Msg
+        cellsView =
+            El.column
+                [ Elbg.color (El.rgb 0 0.5 0.1)
+                , El.width <| El.fillPortion 2
+                , El.height El.fill
+                , El.inFront input
+                ]
+            <|
+                List.map viewCell <|
+                    Dict.toList cells
+
+        controlsView : Element Msg
+        controlsView =
+            El.wrappedRow
+                [ Elbg.color (El.rgb 0 0.1 0.5)
+                , El.width <| El.fillPortion 3
+                , El.height El.fill
+                , El.padding 10
+                , El.spacing 8
+                ]
+                [ El.text "hello world"
+                , El.text "hello world"
+                , El.text "hello world"
+                , El.text "hello world"
+                , El.text "hello world"
+                , El.text "hello world"
+                , El.text "hello world"
+                , El.text "hello world"
+                ]
+
+        root : Html Msg
+        root =
+            El.layout [ El.explain Debug.todo ] <| El.row [] [ cellsView, controlsView ]
     in
-    { title = "hello world", body = elem }
+    { title = "hello world", body = [ root ] }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Push str ->
+            ( model, Cmd.none )
+
+        In str ->
             ( model, Cmd.none )
 
 
