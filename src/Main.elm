@@ -1,13 +1,13 @@
 module Main exposing (main)
 
 import Browser exposing (Document)
+import Browser.Events as Events
 import Debug
 import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Input as Input
 import Html exposing (Html)
-import Html.Events as Events
 import Json.Decode as Decode exposing (Decoder)
 
 
@@ -54,12 +54,12 @@ init _ =
 viewCell : Float -> Element Msg
 viewCell expr =
     el
-        [ width <| px 300
-        , Background.color (rgb 0 0.1 0.5)
+        [ width fill
+        , height <| px 48
+        , padding 12
+        , Background.color (rgb 0.9 0.9 0.9)
         ]
-    <|
-        text <|
-            String.fromFloat expr
+        (text <| String.fromFloat expr)
 
 
 view : Model -> Document Msg
@@ -67,17 +67,23 @@ view model =
     let
         cellsView : Element Msg
         cellsView =
-            Input.text
-                [ centerX
-                , centerY
-                , above <| column [] <| List.map viewCell model.above
-                , below <| column [] <| List.map viewCell model.below
+            column
+                [ width <| fillPortion 2
+                , alignTop
                 ]
-                { label = Input.labelHidden "input"
-                , onChange = In
-                , placeholder = Nothing
-                , text = model.curr
-                }
+            <|
+                List.concat
+                    [ List.map viewCell model.above
+                    , [ Input.text
+                            []
+                            { label = Input.labelHidden "input"
+                            , onChange = In
+                            , placeholder = Nothing
+                            , text = model.curr
+                            }
+                      ]
+                    , List.map viewCell model.below
+                    ]
 
         controlsView : Element Msg
         controlsView =
@@ -91,22 +97,9 @@ view model =
                 [ text "hello world"
                 ]
 
-        keyDecoder : Decoder Keypress
-        keyDecoder =
-            Decode.map2 Keypress
-                (Decode.field "key" Decode.string)
-                (Decode.field "shiftKey" Decode.bool)
-
-        keyDown : Element.Attribute Msg
-        keyDown =
-            htmlAttribute
-                (Events.on "keydown"
-                    (Decode.map Key keyDecoder)
-                )
-
         root : Html Msg
         root =
-            layout [ keyDown ] <|
+            layout [] <|
                 row
                     [ height fill
                     , width fill
@@ -160,4 +153,11 @@ update msg model =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Sub.none
+    let
+        keyDecoder : Decoder Keypress
+        keyDecoder =
+            Decode.map2 Keypress
+                (Decode.field "key" Decode.string)
+                (Decode.field "shiftKey" Decode.bool)
+    in
+    Events.onKeyDown (Decode.map Key keyDecoder)
