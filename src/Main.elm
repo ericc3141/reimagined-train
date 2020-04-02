@@ -3,12 +3,12 @@ module Main exposing (main)
 import Browser exposing (Document)
 import Debug
 import Dict exposing (Dict)
-import Element as El exposing (Element)
-import Element.Background as Elbg
-import Element.Input as Elin
+import Element exposing (..)
+import Element.Background as Background
+import Element.Input as Input
 import Html exposing (Html)
-import Html.Events as HtmlE
-import Json.Decode as JsonD
+import Html.Events as Events
+import Json.Decode as Decode exposing (Decoder)
 
 
 main =
@@ -21,110 +21,141 @@ main =
 
 
 type alias Model =
-    { above : List Expr
-    , below : List Expr
+    { above : List Float
+    , below : List Float
     , curr : String
     }
 
 
-type Expr
-    = Num Float
-
-
 type Msg
-    = Push String
+    = Push Dir
     | In String
-    | Key String
+    | Key Keypress
+
+
+type alias Keypress =
+    { key : String
+    , shift : Bool
+    }
+
+
+type Dir
+    = Up
+    | Down
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { above = [ Num 1 ], below = [ Num -1 ], curr = "" }
+    ( { above = [], below = [], curr = "" }
     , Cmd.none
     )
 
 
-viewCell : Expr -> Element Msg
+viewCell : Float -> Element Msg
 viewCell expr =
-    case expr of
-        Num val ->
-            El.el
-                [ El.width <| El.px 300
-                , Elbg.color (El.rgb 0 0.1 0.5)
-                ]
-            <|
-                El.text <|
-                    String.fromFloat val
+    el
+        [ width <| px 300
+        , Background.color (rgb 0 0.1 0.5)
+        ]
+    <|
+        text <|
+            String.fromFloat expr
 
 
 view : Model -> Document Msg
-view { above, below, curr } =
+view model =
     let
         cellsView : Element Msg
         cellsView =
-            Elin.text
-                [ El.centerX
-                , El.centerY
-                , El.above <| El.column [] <| List.map viewCell above
-                , El.below <| El.column [] <| List.map viewCell below
+            Input.text
+                [ centerX
+                , centerY
+                , above <| column [] <| List.map viewCell model.above
+                , below <| column [] <| List.map viewCell model.below
                 ]
-                { label = Elin.labelHidden "input"
+                { label = Input.labelHidden "input"
                 , onChange = In
                 , placeholder = Nothing
-                , text = curr
+                , text = model.curr
                 }
 
         controlsView : Element Msg
         controlsView =
-            El.wrappedRow
-                [ Elbg.color (El.rgb 0 0.1 0.5)
-                , El.width <| El.fillPortion 3
-                , El.height El.fill
-                , El.padding 10
-                , El.spacing 8
+            wrappedRow
+                [ Background.color (rgb 0 0.1 0.5)
+                , width <| fillPortion 3
+                , height fill
+                , padding 10
+                , spacing 8
                 ]
-                [ El.text "hello world"
-                , El.text "hello world"
-                , El.text "hello world"
-                , El.text "hello world"
-                , El.text "hello world"
-                , El.text "hello world"
-                , El.text "hello world"
-                , El.text "hello world"
+                [ text "hello world"
                 ]
 
-        keyDown : El.Attribute Msg
+        keyDecoder : Decoder Keypress
+        keyDecoder =
+            Decode.map2 Keypress
+                (Decode.field "key" Decode.string)
+                (Decode.field "shiftKey" Decode.bool)
+
+        keyDown : Element.Attribute Msg
         keyDown =
-            El.htmlAttribute
-                (HtmlE.on "keydown"
-                    (JsonD.field "key"
-                        (JsonD.string |> JsonD.map Key)
-                    )
+            htmlAttribute
+                (Events.on "keydown"
+                    (Decode.map Key keyDecoder)
                 )
 
         root : Html Msg
         root =
-            El.layout [ keyDown ] <|
-                El.row
-                    [ El.height El.fill
-                    , El.width El.fill
+            layout [ keyDown ] <|
+                row
+                    [ height fill
+                    , width fill
                     ]
                     [ cellsView, controlsView ]
     in
     { title = "hello world", body = [ root ] }
 
 
+push : Dir -> Model -> Model
+push dir model =
+    let
+        entry =
+            String.toFloat model.curr
+    in
+    case ( entry, dir ) of
+        ( Just expr, Up ) ->
+            { model | above = expr :: model.above }
+
+        ( Just expr, Down ) ->
+            { model | below = expr :: model.below }
+
+        _ ->
+            model
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Push str ->
-            ( model, Cmd.none )
+        Push dir ->
+            ( push dir model, Cmd.none )
 
         In str ->
             ( { model | curr = str }, Cmd.none )
 
-        Key str ->
-            ( model, Cmd.none )
+        Key key ->
+            let
+                updated =
+                    case ( Debug.log "key" key.key, key.shift ) of
+                        ( "Enter", False ) ->
+                            push Up model
+
+                        ( "Enter", True ) ->
+                            push Down model
+
+                        _ ->
+                            model
+            in
+            ( updated, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
