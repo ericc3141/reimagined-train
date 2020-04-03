@@ -9,6 +9,7 @@ import Element.Background as Background
 import Element.Input as Input
 import Html exposing (Html)
 import Json.Decode as Decode exposing (Decoder)
+import Math exposing (Expression(..), Function)
 
 
 main =
@@ -73,7 +74,7 @@ view model =
                 ]
             <|
                 List.concat
-                    [ List.map viewCell model.above
+                    [ List.reverse <| List.map viewCell model.above
                     , [ Input.text
                             []
                             { label = Input.labelHidden "input"
@@ -128,16 +129,35 @@ push dir model =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        Push dir ->
-            ( push dir model, Cmd.none )
-
-        In str ->
-            ( { model | curr = str }, Cmd.none )
-
-        Key key ->
+    let
+        applied : Function -> Model
+        applied function =
             let
-                updated =
+                args =
+                    List.take function.args model.above
+
+                evaluated =
+                    Math.eval <| Apply function (List.map Number args)
+            in
+            case evaluated of
+                Ok (Number n) ->
+                    { model
+                        | curr = String.fromFloat n
+                        , above = n :: List.drop function.args model.above
+                    }
+
+                _ ->
+                    model
+
+        updated =
+            case msg of
+                Push dir ->
+                    push dir model
+
+                In str ->
+                    { model | curr = str }
+
+                Key key ->
                     case ( Debug.log "key" key.key, key.shift ) of
                         ( "Enter", False ) ->
                             push Up model
@@ -145,10 +165,16 @@ update msg model =
                         ( "Enter", True ) ->
                             push Down model
 
+                        ( "+", _ ) ->
+                            applied Math.add
+
+                        ( "-", _ ) ->
+                            applied Math.sub
+
                         _ ->
                             model
-            in
-            ( updated, Cmd.none )
+    in
+    ( updated, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
