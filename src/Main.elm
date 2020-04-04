@@ -1,13 +1,13 @@
 module Main exposing (main)
 
+import AssocList as Dict exposing (Dict)
 import Browser exposing (Document)
-import Browser.Events as Events
-import Debug
-import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Input as Input
+import Element.Keyed as Keyed
 import Html exposing (Html)
+import Html.Events
 import Json.Decode as Decode exposing (Decoder)
 import Math exposing (Expression(..), Function)
 
@@ -29,15 +29,19 @@ type alias Model =
 
 
 type Msg
-    = Push Dir
+    = Do Action
     | In String
     | Key Keypress
 
 
 type alias Keypress =
-    { key : String
-    , shift : Bool
-    }
+    { key : String, shift : Bool }
+
+
+type Action
+    = Push Dir
+    | Pop Dir
+    | Application Function
 
 
 type Dir
@@ -66,25 +70,27 @@ viewCell expr =
 view : Model -> Document Msg
 view model =
     let
-        cellsView : Element Msg
-        cellsView =
-            column
-                [ width <| fillPortion 2
-                , alignTop
-                ]
-            <|
-                List.concat
-                    [ List.reverse <| List.map viewCell model.above
-                    , [ Input.text
-                            []
-                            { label = Input.labelHidden "input"
-                            , onChange = In
-                            , placeholder = Nothing
-                            , text = model.curr
-                            }
-                      ]
-                    , List.map viewCell model.below
-                    ]
+        viewCells : String -> List Float -> List ( String, Element Msg )
+        viewCells prefix =
+            List.indexedMap (\i cell -> ( prefix ++ String.fromInt i, viewCell cell ))
+
+        inputDecoder : Decoder ( Msg, Bool )
+        inputDecoder =
+            Decode.map (\keypress -> ( Key keypress, Dict.member keypress keymap )) <|
+                Decode.map2
+                    Keypress
+                    (Decode.field "key" Decode.string)
+                    (Decode.field "shiftKey" Decode.bool)
+
+        input : Element Msg
+        input =
+            Input.text
+                [ htmlAttribute <| Html.Events.preventDefaultOn "keydown" inputDecoder ]
+                { label = Input.labelHidden "input"
+                , onChange = In
+                , placeholder = Nothing
+                , text = model.curr
+                }
 
         controlsView : Element Msg
         controlsView =
@@ -105,7 +111,18 @@ view model =
                     [ height fill
                     , width fill
                     ]
-                    [ cellsView, controlsView ]
+                    [ Keyed.column
+                        [ width <| fillPortion 2
+                        , alignTop
+                        ]
+                      <|
+                        List.concat
+                            [ List.reverse (viewCells "above" model.above)
+                            , [ ( "input", input ) ]
+                            , viewCells "below" model.below
+                            ]
+                    , controlsView
+                    ]
     in
     { title = "hello world", body = [ root ] }
 
@@ -127,51 +144,76 @@ push dir model =
             model
 
 
+keymap : Dict Keypress Action
+keymap =
+    Dict.fromList
+        [ ( Keypress "Enter" False, Push Up )
+        , ( Keypress "Enter" True, Push Down )
+        , ( Keypress " " False, Pop Up )
+        , ( Keypress " " True, Pop Down )
+        , ( Keypress "+" True, Application Math.add )
+        , ( Keypress "*" True, Application Math.mul )
+        , ( Keypress "/" False, Application Math.div )
+        ]
+
+
+applied : Function -> Model -> Model
+applied function model =
+    let
+        args =
+            List.take function.args model.above
+
+        evaluated =
+            Math.eval <| Apply function (List.map Number args)
+    in
+    case evaluated of
+        Ok (Number n) ->
+            { model
+                | curr = Debug.log "eval" <| String.fromFloat n
+                , above = n :: List.drop function.args model.above
+            }
+
+        _ ->
+            model
+
+
+perform : Action -> Model -> Model
+perform action model =
+    case action of
+        Push dir ->
+            push dir model
+
+        Pop Up ->
+            { model | above = List.drop 1 model.above }
+
+        Pop Down ->
+            { model | below = List.drop 1 model.below }
+
+        Application function ->
+            applied function model
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
-        applied : Function -> Model
-        applied function =
-            let
-                args =
-                    List.take function.args model.above
-
-                evaluated =
-                    Math.eval <| Apply function (List.map Number args)
-            in
-            case evaluated of
-                Ok (Number n) ->
-                    { model
-                        | curr = String.fromFloat n
-                        , above = n :: List.drop function.args model.above
-                    }
-
-                _ ->
-                    model
-
         updated =
             case msg of
-                Push dir ->
-                    push dir model
+                Do action ->
+                    perform action model
 
                 In str ->
-                    { model | curr = str }
+                    if String.contains "--" str then
+                        perform (Application Math.sub) model
+
+                    else
+                        { model | curr = Debug.log "in " str }
 
                 Key key ->
-                    case ( Debug.log "key" key.key, key.shift ) of
-                        ( "Enter", False ) ->
-                            push Up model
+                    case Dict.get key keymap of
+                        Just action ->
+                            perform action model
 
-                        ( "Enter", True ) ->
-                            push Down model
-
-                        ( "+", _ ) ->
-                            applied Math.add
-
-                        ( "-", _ ) ->
-                            applied Math.sub
-
-                        _ ->
+                        Nothing ->
                             model
     in
     ( updated, Cmd.none )
@@ -179,11 +221,4 @@ update msg model =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    let
-        keyDecoder : Decoder Keypress
-        keyDecoder =
-            Decode.map2 Keypress
-                (Decode.field "key" Decode.string)
-                (Decode.field "shiftKey" Decode.bool)
-    in
-    Events.onKeyDown (Decode.map Key keyDecoder)
+    Sub.none

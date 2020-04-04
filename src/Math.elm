@@ -1,4 +1,4 @@
-module Math exposing (Expression(..), Function, add, eval, sub)
+module Math exposing (Expression(..), Function, add, div, eval, mul, sub)
 
 import Dict exposing (Dict)
 
