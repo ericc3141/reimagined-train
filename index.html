@@ -8,6 +8,16 @@
 </head>
 
 <body>
-    <script>const app = Elm.Main.init();</script>
+    <script>
+        const app = Elm.Main.init();
+
+        /* wait a frame, then call select() on element.
+         * need to wait because Elm may change element on this update
+         */
+        function select(id) {
+            requestAnimationFrame( () => document.getElementById(id).select());
+        }
+        app.ports.select.subscribe(select);
+    </script>
 </body>
 </html>

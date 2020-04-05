@@ -1,4 +1,4 @@
-module Main exposing (main)
+port module Main exposing (main)
 
 import AssocList as Dict exposing (Dict)
 import Browser exposing (Document)
@@ -7,6 +7,7 @@ import Element.Background as Background
 import Element.Input as Input
 import Element.Keyed as Keyed
 import Html exposing (Html)
+import Html.Attributes
 import Html.Events
 import Json.Decode as Decode exposing (Decoder)
 import Math exposing (Expression(..), Function)
@@ -56,6 +57,9 @@ init _ =
     )
 
 
+port select : String -> Cmd msg
+
+
 viewCell : Float -> Element Msg
 viewCell expr =
     el
@@ -85,7 +89,9 @@ view model =
         input : Element Msg
         input =
             Input.text
-                [ htmlAttribute <| Html.Events.preventDefaultOn "keydown" inputDecoder ]
+                [ htmlAttribute <| Html.Attributes.id "input"
+                , htmlAttribute <| Html.Events.preventDefaultOn "keydown" inputDecoder
+                ]
                 { label = Input.labelHidden "input"
                 , onChange = In
                 , placeholder = Nothing
@@ -195,28 +201,24 @@ perform action model =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
-        updated =
-            case msg of
-                Do action ->
-                    perform action model
+    case msg of
+        Do action ->
+            ( perform action model, select "input" )
 
-                In str ->
-                    if String.contains "--" str then
-                        perform (Application Math.sub) model
+        In str ->
+            if String.contains "--" str then
+                ( perform (Application Math.sub) model, select "input" )
 
-                    else
-                        { model | curr = Debug.log "in " str }
+            else
+                ( { model | curr = Debug.log "in " str }, Cmd.none )
 
-                Key key ->
-                    case Dict.get key keymap of
-                        Just action ->
-                            perform action model
+        Key key ->
+            case Dict.get key keymap of
+                Just action ->
+                    ( perform action model, select "input" )
 
-                        Nothing ->
-                            model
-    in
-    ( updated, Cmd.none )
+                Nothing ->
+                    ( model, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
